@@ -99,25 +99,25 @@ if __name__ == '__main__':
     X,Y,Z=dm.insert()
     #--------
     #making graph
-    fig = plt.figure()
-    ax = Axes3D(fig)
-    ims=[]
+    # fig = plt.figure()
+    # ax = Axes3D(fig)
+    # ims=[]
     
     # frames = []  # 各フレームを構成する Artist 一覧
     # fig, ax = plt.subplots()
     
-    for i in range(99):
-        fig = plt.figure()
-        ax = Axes3D(fig)    
-        print("now output No.{}".format(i))
-        # Z[0,0,:]=0.002
-        # Z[0,1,:]=-0.002
-        ax.plot_wireframe(X, Y, Z[:,:,i])
-        fig.savefig("save/img_{}.png".format(i))
-        #1回matplotをリセットする必要がある
-        #リセットしないと全てのグラフが残り続ける
-        plt.clf()
-        plt.close()
+    # for i in range(99):
+    #     fig = plt.figure()
+    #     ax = Axes3D(fig)    
+    #     print("now output No.{}".format(i))
+    #     # Z[0,0,:]=0.002
+    #     # Z[0,1,:]=-0.002
+    #     ax.plot_wireframe(X, Y, Z[:,:,i])
+    #     fig.savefig("save/img_{}.png".format(i))
+    #     #1回matplotをリセットする必要がある
+    #     #リセットしないと全てのグラフが残り続ける
+    #     plt.clf()
+    #     plt.close()
     
     count_time=0
     count_time1=0
@@ -142,12 +142,14 @@ if __name__ == '__main__':
             Z_stack=np.vstack((Z_stack,Z_ex))
         print("now doing ",i)
     print('fin')
+    # Z_stack.tolist()
+    np.save('np_save', Z_stack)
     ipdb.set_trace()
     
-    dict1 = {'Z_stack' : Z_stack}
-    file1 = open("dataset_for_vae-lstm.txt", "w") 
-    file1.write("%s" %(dict1))
-    file1.close()
+    # dict1 = {'Z_stack' : Z_stack}
+    # file1 = open("dataset_for_vae-lstm.txt", "w") 
+    # file1.write("%s" %(dict1))
+    # file1.close()
 
 
 # # フレームごとの Artist を作成する。

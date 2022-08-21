@@ -1,3 +1,4 @@
+from dis import dis
 import os # tensorboardの出力先作成
 import matplotlib.pyplot as plt # 可視化
 import numpy as np # 計算
@@ -46,7 +47,8 @@ class VAE(nn.Module):
         super(VAE, self).__init__() # VAEクラスはnn.Moduleを継承しているため親クラスのコンストラクタを呼ぶ必要がある
         self.eps = np.spacing(1) # オーバーフローとアンダーフローを防ぐための微小量 printすると2.2ぐらいになる
         # self.x_dim = 28 * 28 # MNISTの場合は28×28の画像であるため
-        self.x_dim = 500
+        self.x_dim = 1000000
+        # self.x_dim = 500
         #今回の場合3(軸)*6(軌道のサンプリング方法)とか
         self.z_dim = z_dim # インスタンス化の際に潜在空間の次元数は自由に設定できる
         #----------------------------------------------
@@ -134,6 +136,7 @@ class VAE(nn.Module):
 if __name__ == '__main__':
     V=VAE(3)
     
+    # ipdb.set_trace()
     # GPUが使える場合はGPU上で動かす
     device = torch.device(str("cuda:0") if torch.cuda.is_available() else "cpu") 
     # VAEクラスのコンストラクタに潜在変数の次元数を渡す
@@ -153,13 +156,14 @@ if __name__ == '__main__':
     num_batch_train = 0
     num_batch_valid = 0
     
-    # ipdb.set_trace()
-    
+    dist_x=np.load('np_save_0-500.npy')
+    counts_index=0
     # 学習開始-------------------------------
     for num_iter in range(num_epochs):
         model.train() # 学習前は忘れずにtrainモードにしておく
         for x, t in dataloader_train: # dataloaderから訓練データを抽出する
             x=x[:,0:500]
+            # x=dist_x
             # ipdb.set_trace()        
             x=x.to(device)
             # ipdb.set_trace()
@@ -169,6 +173,9 @@ if __name__ == '__main__':
             loss.backward()
             optimizer.step()
             num_batch_train += 1
+            counts_index += 1
+            print(counts_index)
+        counts_index=0
         num_batch_train -= 1 # 次回のエポックでつじつまを合わせるための調整
     #----------------------------------------
     
@@ -177,6 +184,7 @@ if __name__ == '__main__':
         loss = []
         for x, t in dataloader_valid: # dataloaderから検証データを抽出する
             x=x[:,0:500]
+            # x=dist_x
             x=x.to(device)
             # ipdb.set_trace()
             lower_bound, _, _ = model(x, device) # VAEにデータを流し込む
