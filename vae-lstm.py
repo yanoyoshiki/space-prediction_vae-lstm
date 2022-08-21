@@ -31,8 +31,8 @@ dataloader_test = torch.utils.data.DataLoader(dataset_test, batch_size=1000, shu
 
 
 
-class VAE(nn.Module):
-    def __init__(self, z_dim):
+class VAE_LSTM(nn.Module):
+    def __init__(self, z_dim,hidden_size,batch_first):
         """コンストラクタ
 
         Args:
@@ -44,11 +44,12 @@ class VAE(nn.Module):
         Note:
             eps (float): オーバーフローとアンダーフローを防ぐための微小量
             """
-        super(VAE, self).__init__() # VAEクラスはnn.Moduleを継承しているため親クラスのコンストラクタを呼ぶ必要がある
+        
+        super(VAE_LSTM, self).__init__() # VAEクラスはnn.Moduleを継承しているため親クラスのコンストラクタを呼ぶ必要がある
         self.eps = np.spacing(1) # オーバーフローとアンダーフローを防ぐための微小量 printすると2.2ぐらいになる
         # self.x_dim = 28 * 28 # MNISTの場合は28×28の画像であるため
-        self.x_dim = 10000
-        # self.x_dim = 500
+        # self.x_dim = 1000000
+        self.x_dim = 500
         #今回の場合3(軸)*6(軌道のサンプリング方法)とか
         self.z_dim = z_dim # インスタンス化の際に潜在空間の次元数は自由に設定できる
         #----------------------------------------------
@@ -58,10 +59,24 @@ class VAE(nn.Module):
         self.enc_fc3_mean = nn.Linear(200, z_dim) # 近似事後分布の平均
         self.enc_fc3_logvar = nn.Linear(200, z_dim) # 近似事後分布の分散の対数
         #----------------------------------------------
+        #LSTM層
+        input_size=1
+        
+        self.rnn = nn.LSTM(input_size = input_size,
+                            hidden_size = hidden_size,
+                            batch_first = batch_first)# definition LSTM
+        #----------------------------------------------
+        
+        #----------------------------------------------
         self.dec_fc1 = nn.Linear(z_dim, 200) # デコーダ1層目
         self.dec_fc2 = nn.Linear(200, 400) # デコーダ2層目
         self.dec_drop = nn.Dropout(p=0.2) # 過学習を防ぐために最終層の直前にドロップアウト
         self.dec_fc3 = nn.Linear(400, self.x_dim) # デコーダ3層目
+
+
+
+        nn.init.xavier_normal_(self.rnn.weight_ih_l0)
+        nn.init.orthogonal_(self.rnn.weight_hh_l0)
 
 #----------------------------------------------------
 
@@ -125,7 +140,12 @@ class VAE(nn.Module):
         """
         mean, log_var = self.encoder(x.to(device)) # encoder部分
         z = self.sample_z(mean, log_var, device) # Reparametrization trick部分
-        y = self.decoder(z) # decoder部分
+        ipdb.set_trace()
+        z = torch.unsqueeze(z,2)
+        ipdb.set_trace()
+        h, _= self.rnn(z)
+        ipdb.set_trace()
+        y = self.decoder(h) # decoder部分
         KL = 0.5 * torch.sum(1 + log_var - mean**2 - torch.exp(log_var)) # KLダイバージェンス計算
         reconstruction = torch.sum(x * torch.log(y + self.eps) + (1 - x) * torch.log(1 - y + self.eps)) # 再構成誤差計算
         return [KL, reconstruction], z, y
@@ -134,13 +154,17 @@ class VAE(nn.Module):
 
 
 if __name__ == '__main__':
-    V=VAE(3)
+    batch_size = 10
+    batch_first = True
+    hidden_size = 64
+    
+    V=VAE_LSTM(3,hidden_size,batch_first)
     
     # ipdb.set_trace()
     # GPUが使える場合はGPU上で動かす
     device = torch.device(str("cuda:0") if torch.cuda.is_available() else "cpu") 
     # VAEクラスのコンストラクタに潜在変数の次元数を渡す
-    model = VAE(2).to(device)
+    model = VAE_LSTM(2,hidden_size,batch_first).to(device)
     
     # 今回はoptimizerとしてAdamを利用
     optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -156,49 +180,43 @@ if __name__ == '__main__':
     num_batch_train = 0
     num_batch_valid = 0
     
-    dist_x=torch.tensor(np.load('np_save_0-250.npy')[:,:10000]*(1/100)).float()
+    dist_x=np.load('np_save_0-500.npy')
     counts_index=0
     # 学習開始-------------------------------
     for num_iter in range(num_epochs):
         model.train() # 学習前は忘れずにtrainモードにしておく
         for x, t in dataloader_train: # dataloaderから訓練データを抽出する
-            # x=x[:,0:500]
-            x=dist_x
+            x=x[:,0:500]
+            # x=dist_x
             # ipdb.set_trace()        
             x=x.to(device)
-            lower_bound, z, _ = model(x, device) # VAEにデータを流し込む 引数として取り出すのは[KL,再構築誤差]
-            # ipdb.set_trace()
+            ipdb.set_trace()
+            lower_bound, _, _ = model(x, device) # VAEにデータを流し込む 引数として取り出すのは[KL,再構築誤差]
             loss = -sum(lower_bound) # lossは負の下限
             model.zero_grad() # 訓練時のpytorchのお作法
             loss.backward()
             optimizer.step()
             num_batch_train += 1
             counts_index += 1
-            # print(counts_index)
+            print(counts_index)
         counts_index=0
         num_batch_train -= 1 # 次回のエポックでつじつまを合わせるための調整
     #----------------------------------------
-    
+
         # 検証開始
         model.eval() # 検証前は忘れずにevalモードにしておく
         loss = []
-        counts_index=0
-        dist_x_se=torch.tensor(np.load('np_save_251-500.npy')[:,:10000]*(1/100)).float()
         for x, t in dataloader_valid: # dataloaderから検証データを抽出する
-            # x=x[:,0:500]
-            x=dist_x_se
+            x=x[:,0:500]
+            # x=dist_x
             x=x.to(device)
-            lower_bound, _, _ = model(x, device) # VAEにデータを流し込む
             # ipdb.set_trace()
+            lower_bound, _, _ = model(x, device) # VAEにデータを流し込む
             loss.append(-sum(lower_bound).cpu().detach().numpy())
             num_batch_valid += 1
-            counts_index += 1
-            print("count index is ",counts_index)
-        counts_index=0
         num_batch_valid -= 1 # 次回のエポックでつじつまを合わせるための調整
         loss_valid = np.mean(loss)
         loss_valid_min = np.minimum(loss_valid_min, loss_valid)
-        # ipdb.set_trace()
         print(f"[EPOCH{num_iter + 1}] loss_valid: {int(loss_valid)} | Loss_valid_min: {int(loss_valid_min)}")
 
         # もし今までのlossの最小値よりも今回のイテレーションのlossが大きければカウンタ変数をインクリメントする
@@ -213,10 +231,5 @@ if __name__ == '__main__':
         if (num_no_improved >= 10):
             print(f"{num_no_improved}回連続でValidationが悪化したため学習を止めます")
             break
-lower_bound, z, _ = model(x, device)
-print(z.shape)
-torch.save(z,'z_from_vae.pt')
-torch.save(model.state_dict(), "vae-model.pth")
-print('fin')
-# ipdb.set_trace()
+ipdb.set_trace()
 #---------------------------------------------------

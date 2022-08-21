@@ -65,6 +65,7 @@ class data_make():
             Z_v=np.dstack((Z_v,Z))
             # ipdb.set_trace()
             print("now calculation No.{}".format(i))
+            ipdb.set_trace()
         return X,Y,Z_v
 
 
